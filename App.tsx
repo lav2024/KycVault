@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import Navbar from './components/Navbar';
-import { Login, Register } from './components/Auth';
+import { Login, Register, ForgotPassword } from './components/Auth';
 import Verification from './components/Verification';
 import AdminDashboard from './components/AdminDashboard';
 import UserProfile from './components/UserProfile';
@@ -389,6 +389,12 @@ const MOCK_SUBMISSIONS: KycSubmission[] = [
   }
 ];
 
+// Initial mock users "database"
+const INITIAL_USERS: User[] = [
+    { username: 'Lav', password: 'asd123', role: Role.ADMIN, email: 'admin@kycvault.com' },
+    { username: 'Lavanya', password: 'qwerty', role: Role.USER, email: 'lavanya@example.com' }
+];
+
 const LandingPage = ({ onStart }: { onStart: () => void }) => (
   <div className="relative isolate flex flex-col min-h-[calc(100vh-64px)] justify-center">
      {/* Hero Section */}
@@ -480,13 +486,44 @@ const UserHome = ({ user, onStartVerification, onAdminDashboard }: { user: User,
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState('landing');
   const [user, setUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [submissions, setSubmissions] = useState<KycSubmission[]>(MOCK_SUBMISSIONS);
   const [userSubmission, setUserSubmission] = useState<KycSubmission | null>(null);
 
+  // --- Auth Handlers ---
+
+  const handleAuthenticate = (username: string, password: string, role: Role): User | null => {
+      const foundUser = users.find(u => u.username === username && u.role === role);
+      if (foundUser && foundUser.password === password) {
+          return foundUser;
+      }
+      return null;
+  };
+
+  const handleRegisterMock = (newUser: User & {password: string}): boolean => {
+      if (users.some(u => u.username === newUser.username || u.email === newUser.email)) {
+          return false; // User exists
+      }
+      setUsers([...users, newUser]);
+      return true;
+  };
+
+  const handleResetPassword = (email: string, newPass: string): boolean => {
+      setUsers(prevUsers => prevUsers.map(u => 
+          u.email === email ? { ...u, password: newPass } : u
+      ));
+      return true;
+  };
+
+  const checkEmailExists = (email: string): boolean => {
+      return users.some(u => u.email === email);
+  };
+
   const handleLogin = (loggedInUser: User) => {
     setUser(loggedInUser);
+    // Find previous submission for this specific user
     const existing = submissions.find(s => s.username === loggedInUser.username);
-    if(existing) setUserSubmission(existing);
+    setUserSubmission(existing || null);
     
     // Redirect to User Home instead of direct dashboard/verification
     setCurrentPage('user-home');
@@ -536,11 +573,28 @@ const App: React.FC = () => {
         )}
 
         {currentPage === 'login' && (
-          <Login onLogin={handleLogin} onNavigate={setCurrentPage} />
+          <Login 
+            onLogin={handleLogin} 
+            onNavigate={setCurrentPage} 
+            onAuthenticate={handleAuthenticate}
+          />
         )}
 
         {currentPage === 'register' && (
-          <Register onLogin={handleLogin} onNavigate={setCurrentPage} />
+          <Register 
+            onLogin={handleLogin} 
+            onNavigate={setCurrentPage} 
+            onRegister={handleRegisterMock}
+          />
+        )}
+
+        {currentPage === 'forgot-password' && (
+           <ForgotPassword 
+                onNavigate={setCurrentPage} 
+                onLogin={handleLogin} // Not used but required by type
+                checkEmailExists={checkEmailExists}
+                onResetPassword={handleResetPassword}
+           />
         )}
 
         {/* New User Home Page */}
@@ -577,15 +631,6 @@ const App: React.FC = () => {
             onUpdateStatus={handleStatusUpdate}
             onDelete={handleDeleteSubmission}
           />
-        )}
-        
-        {/* Basic Forgot Password Placeholder */}
-        {currentPage === 'forgot-password' && (
-             <div className="flex flex-col items-center justify-center min-h-[60vh]">
-                <h2 className="text-2xl font-bold text-white mb-4">Reset Password</h2>
-                <p className="text-gray-400 mb-6">A reset link has been sent to your email.</p>
-                <button onClick={() => setCurrentPage('login')} className="text-purple-400 hover:text-purple-300">Back to Login</button>
-            </div>
         )}
       </main>
     </div>

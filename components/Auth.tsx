@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import { User, Role } from '../types';
-import { Lock, Mail, User as UserIcon, ShieldAlert } from 'lucide-react';
+import { Lock, Mail, User as UserIcon, ShieldAlert, ArrowLeft, KeyRound, Check, Send } from 'lucide-react';
 
 interface AuthProps {
   onLogin: (user: User) => void;
   onNavigate: (page: string) => void;
+  // New props for the "Database" interaction
+  onAuthenticate?: (username: string, password: string, role: Role) => User | null;
+  onRegister?: (user: User & {password: string}) => boolean;
+  onResetPassword?: (email: string, newPass: string) => boolean;
+  checkEmailExists?: (email: string) => boolean;
 }
 
 const RoleSelector = ({ role, setRole }: { role: Role, setRole: (r: Role) => void }) => (
@@ -34,7 +39,7 @@ const RoleSelector = ({ role, setRole }: { role: Role, setRole: (r: Role) => voi
   </div>
 );
 
-export const Login: React.FC<AuthProps> = ({ onLogin, onNavigate }) => {
+export const Login: React.FC<AuthProps> = ({ onLogin, onNavigate, onAuthenticate }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<Role>(Role.USER);
@@ -49,27 +54,16 @@ export const Login: React.FC<AuthProps> = ({ onLogin, onNavigate }) => {
       return;
     }
 
-    // Strict Credential Check
-    if (role === Role.ADMIN) {
-        if (username === 'Lav' && password === 'asd123') {
-             onLogin({ 
-                username: username, 
-                role: role, 
-                email: 'admin@kycvault.com' 
-             });
+    // Use the central auth handler from App.tsx
+    if (onAuthenticate) {
+        const user = onAuthenticate(username, password, role);
+        if (user) {
+            onLogin(user);
         } else {
-            setError('Wrong credentials');
+            setError('Invalid username or password');
         }
-    } else if (role === Role.USER) {
-        if (username === 'Lavanya' && password === 'qwerty') {
-             onLogin({ 
-                username: username, 
-                role: role, 
-                email: 'lavanya@example.com' 
-             });
-        } else {
-             setError('Wrong credentials');
-        }
+    } else {
+        setError('Auth service unavailable');
     }
   };
 
@@ -133,7 +127,7 @@ export const Login: React.FC<AuthProps> = ({ onLogin, onNavigate }) => {
   );
 };
 
-export const Register: React.FC<AuthProps> = ({ onLogin, onNavigate }) => {
+export const Register: React.FC<AuthProps> = ({ onLogin, onNavigate, onRegister }) => {
   const [formData, setFormData] = useState({ username: '', email: '', password: '', confirmPassword: '' });
   const [role, setRole] = useState<Role>(Role.USER);
   const [error, setError] = useState('');
@@ -149,12 +143,24 @@ export const Register: React.FC<AuthProps> = ({ onLogin, onNavigate }) => {
       return;
     }
     
-    // Simulate Registration with selected role
-    onLogin({ 
-      username: formData.username, 
-      role: role, 
-      email: formData.email 
-    });
+    if (onRegister) {
+        const success = onRegister({
+            username: formData.username,
+            email: formData.email,
+            password: formData.password,
+            role: role
+        });
+
+        if (success) {
+            onLogin({ 
+                username: formData.username, 
+                role: role, 
+                email: formData.email 
+            });
+        } else {
+            setError('Username or Email already exists.');
+        }
+    }
   };
 
   return (
@@ -222,4 +228,166 @@ export const Register: React.FC<AuthProps> = ({ onLogin, onNavigate }) => {
       </div>
     </div>
   );
+};
+
+export const ForgotPassword: React.FC<AuthProps> = ({ onNavigate, onResetPassword, checkEmailExists }) => {
+    const [step, setStep] = useState(1); // 1: Email, 2: Code, 3: Password
+    const [email, setEmail] = useState('');
+    const [code, setCode] = useState('');
+    const [generatedCode, setGeneratedCode] = useState('');
+    const [newPass, setNewPass] = useState('');
+    const [confirmPass, setConfirmPass] = useState('');
+    const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+  
+    const handleSendCode = (e: React.FormEvent) => {
+      e.preventDefault();
+      setError('');
+      if(!email) return setError("Please enter your email address");
+      if(!email.includes('@')) return setError("Please enter a valid email address");
+      
+      // Check existence
+      if (checkEmailExists && !checkEmailExists(email)) {
+         return setError("This email is not registered with us.");
+      }
+
+      setIsLoading(true);
+      
+      // Simulate API Call
+      setTimeout(() => {
+          const rnd = Math.floor(1000 + Math.random() * 9000).toString();
+          setGeneratedCode(rnd);
+          setIsLoading(false);
+          setStep(2);
+          
+          // Simulate Email Sending with Requested Format
+          alert(`Subject: Reset password\n\nHello User,\nWe received the password reset request from you . submit this code ${rnd} in the app to reset it perfectly.`);
+      }, 1500);
+    };
+  
+    const handleVerifyCode = (e: React.FormEvent) => {
+       e.preventDefault();
+       setError('');
+       if(code === generatedCode) {
+           setStep(3);
+       } else {
+           setError('Invalid code. Please check the simulated email.');
+       }
+    };
+  
+    const handleReset = (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        if(newPass !== confirmPass) return setError("Passwords do not match");
+        if(!newPass) return setError("Please enter a new password");
+        
+        if(onResetPassword) {
+            onResetPassword(email, newPass);
+            alert("Password has been reset successfully. Please login with your new password.");
+            onNavigate('login');
+        }
+    };
+  
+    return (
+      <div className="flex items-center justify-center min-h-[80vh]">
+        <div className="w-full max-w-md p-8 bg-slate-900/50 backdrop-blur-xl rounded-2xl border border-purple-500/20 shadow-2xl relative">
+            <button onClick={() => onNavigate('login')} className="absolute top-6 left-6 text-gray-500 hover:text-white transition-colors">
+                <ArrowLeft size={20} />
+            </button>
+            
+            <h2 className="text-2xl font-bold text-center mb-2 text-white">Reset Password</h2>
+            
+            <div className="flex justify-center mb-6 mt-4">
+                <div className="flex items-center gap-2">
+                    <div className={`w-3 h-3 rounded-full ${step >= 1 ? 'bg-purple-500' : 'bg-gray-700'}`}></div>
+                    <div className={`w-8 h-1 ${step >= 2 ? 'bg-purple-500' : 'bg-gray-700'}`}></div>
+                    <div className={`w-3 h-3 rounded-full ${step >= 2 ? 'bg-purple-500' : 'bg-gray-700'}`}></div>
+                    <div className={`w-8 h-1 ${step >= 3 ? 'bg-purple-500' : 'bg-gray-700'}`}></div>
+                    <div className={`w-3 h-3 rounded-full ${step >= 3 ? 'bg-purple-500' : 'bg-gray-700'}`}></div>
+                </div>
+            </div>
+
+            {error && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm text-center">{error}</div>}
+
+            {step === 1 && (
+                <form onSubmit={handleSendCode} className="space-y-6">
+                    <p className="text-center text-gray-400 text-sm">Enter your registered email address to receive a verification code.</p>
+                    <div className="relative">
+                        <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                        <input
+                            type="email"
+                            placeholder="Email Address"
+                            className="w-full bg-slate-800/50 border border-purple-500/20 rounded-xl py-2.5 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                            value={email}
+                            onChange={e => setEmail(e.target.value)}
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                    >
+                        {isLoading ? 'Sending...' : <>Send Code <Send size={16} /></>}
+                    </button>
+                </form>
+            )}
+
+            {step === 2 && (
+                <form onSubmit={handleVerifyCode} className="space-y-6">
+                     <p className="text-center text-gray-400 text-sm">We've sent a 4-digit code to <span className="text-white">{email}</span>.</p>
+                     <div className="relative">
+                        <KeyRound className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                        <input
+                            type="text"
+                            placeholder="Enter 4-digit Code"
+                            className="w-full bg-slate-800/50 border border-purple-500/20 rounded-xl py-2.5 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 tracking-widest text-center text-lg font-mono"
+                            value={code}
+                            maxLength={4}
+                            onChange={e => setCode(e.target.value.replace(/[^0-9]/g, ''))}
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 rounded-xl transition-all"
+                    >
+                        Verify Code
+                    </button>
+                    <button type="button" onClick={() => setStep(1)} className="w-full text-center text-xs text-gray-500 hover:text-white">Wrong email?</button>
+                </form>
+            )}
+
+            {step === 3 && (
+                <form onSubmit={handleReset} className="space-y-4">
+                     <p className="text-center text-gray-400 text-sm">Create a new password for your account.</p>
+                     <div className="relative">
+                        <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                        <input
+                            type="password"
+                            placeholder="New Password"
+                            className="w-full bg-slate-800/50 border border-purple-500/20 rounded-xl py-2.5 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                            value={newPass}
+                            onChange={e => setNewPass(e.target.value)}
+                        />
+                    </div>
+                    <div className="relative">
+                        <Lock className="absolute left-3 top-3 h-5 w-5 text-gray-500" />
+                        <input
+                            type="password"
+                            placeholder="Confirm New Password"
+                            className="w-full bg-slate-800/50 border border-purple-500/20 rounded-xl py-2.5 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                            value={confirmPass}
+                            onChange={e => setConfirmPass(e.target.value)}
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                    >
+                        Update Password <Check size={18} />
+                    </button>
+                </form>
+            )}
+        </div>
+      </div>
+    );
 };

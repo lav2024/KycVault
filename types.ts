@@ -19,6 +19,7 @@ export interface User {
   username: string;
   role: Role;
   email?: string;
+  password?: string; // Added for mock auth persistence
 }
 
 export interface DocumentData {

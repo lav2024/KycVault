@@ -1,5 +1,5 @@
 {
-  "name": "KycVault - AI Fraud Detection",
+  "name": "KycVault",
   "description": "An AI-powered KYC and fraud detection prototype simulating identity verification with Gemini 2.5 Flash.",
   "requestFramePermissions": []
 }
